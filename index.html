@@ -139,14 +139,21 @@ layout: true
 class: center, middle, inverse
 
 ---
-# Functional Event Sourced Apps
-#with Fun.CQRS
+## Functional 
+## Event Sourced 
+## Applications
+## with 
+# Fun.CQRS
 
 [strongtyped/fun-cqrs-workshop-lite](https://github.com/strongtyped/fun-cqrs-workshop-lite/)
 
 [strongtyped/fun-cqrs-workshop-lite-slides](https://github.com/strongtyped/fun-cqrs-workshop-lite-slides/)
 
 ???
+
+@Renato: 
+I completely changed the layout of this slide 
+
 TODO:
 
 Slide about Backends
@@ -157,12 +164,17 @@ Why is becoming popular?
 https://jazzy.id.au/2016/10/08/cqrs-increases-consistency.html
 
 ---
-  # Before we start ...
+  
+# Before we start ...
 
-  ```bash
+ 
+ 
+```bash
   git clone git@github.com:strongtyped/fun-cqrs-workshop-lite.git
-  ```
+```
+
 ---
+
 layout: false
 .left-column[ # Agenda ]
 .right-column[
@@ -175,6 +187,13 @@ layout: false
 4. Read model design (configuring and testing)
 ]
 
+
+???
+
+@Renato: 
+I am not sure if this is still an adequate list
+Maybe simply have 1. , 2. and 3. Workshop
+
 ---
 
 class: left, top
@@ -182,28 +201,52 @@ class: left, top
 
 ## Command Query Responsibility Segregation
 
-  - two models:
+  - two separate models:
      - **Command** (or **Write**) model
      - **Query** (or **Read**) model
 
-  - the write side **receives commands** and **emits events**
+???
 
-  - the read side **consumes events** and (typically) **generates views**
+@Renato: 
+I splitted 1 slide to 3 slides
 
-  - commands represent what *will happen in the future*
-     - more correctly: what *may or may not* happen in the future
+---
 
-  - events represent what *has happened in the past*
-     - no doubt here: what *surely* has happened in the past
+class: left, top
+# What is CQRS? (write side)
+
+  - the write side **receives commands**
+
+  - commands represent **an intention** that
+     - may be **rejected** (resulting in some kind of **failure**)
+     - may be **accepted** (**publishing** zero or more **events**)
+
+  - events represent **what has happened**
+     - *zero events*: nothing happened
+     - *one or more events*: one or more things have happened
 
 ???
-Commands are written in the imperative tense and they reveal an intention.
+
+Commands are written in the imperative tense 
 `CreateOrder`, `AddItem`, `CancelOrder`, etc.
-They may be rejected, silently ignored (zero events) or emit one or more events.
 
-Events represent what has happened and therefore are always written in the past tense.
+Events are written in the past tense.
+`OrderWasCreated`, `ItemWasAdded`, `OrderWasCancelled`, etc.
 
-TODO: rephrase sentence over commands. (intention)
+---
+
+class: left, top
+# What is CQRS? (read side)
+
+  - the read side **subscribes** to **events** and reacts upon event **notifications**
+     - it can react in whatever way it wants
+     - typically, it **generates views**
+
+???
+
+@Renato: 
+I have tried to stay close to the vocabulary of the standard java reactive org pub/sub api
+
 
 ---
 
@@ -213,57 +256,57 @@ layout: false
 
 ## Event Sourcing
 
-  - **ES** records each event to an **Event Log** (a.k.a. **(Event) Journal**)
-     - The event log is the *single source of truth*
-     - The event log is *append-only*
+  - Records each event in an **Event Log** (a.k.a. **(Event) Journal**)
+     - The event log is **append-only**
+     - The event log is the **single source of truth**
+
 ---
 
 layout: false
 
 # What is CQRS/ES?
 
-  - ES is very often used in combination with CQRS
-     - **CQRS/ES** is a very powerful paradigm
+  - ES is very often used in **combination** with CQRS
+
+  - this combination, a.k.a. **CQRS/ES**, is a very powerful paradigm
+
+  - CQRS/ES allows for **Asynchronous** CQRS
+
+     - results in an efficient/scalable write model
+        - avoids any write contention
+
+     - supports multiple read models
+        - using different storage mechanisms
+        - using different data from write model
+      
 
 ???
-Synchronous vs. Asynchronous CQRS
-What about multiple views? And what about contention?
-Event source makes CQRS scale.
 
 1. naive async: cron-job that reads the write-model and generates read-model. Very inefficient and write-model must have all data that read-model needs.
 2. sync: write-model and read-model together in same tx. What we do when we have many read-models? Over different storages? Contention not solved.
 3. async: event sourcing - event journal
 
-TODO: add some more bulletpoints
 ---
 
 # What is an Aggregate?
 
-  - It's a **DDD** (Domain Driven Design) concept
-     - related to a **Consistency Boundary**
+  - It's a **Domain Driven Design** concept, related to a **Consistency Boundary**
 
-  - For **CQRS** the consistency boundary corresponds to the **commands**
+  - An aggregate somehow represents the **history** of all past events
+     - think of it as an **accumulated result** of somehow **traversing** all past events, while **applying** them to an **accumulator** 
 
-  - For **CQRS/ES** the consistency boundary corresponds to the **events**
-     - commands can be *accepted* or *rejected*
+  - An aggregate somehow decides if a command is rejected or accepted (publishing zero or more events)
+     - think of it as a **guardian** of a consistency boundary
+
+  - It is the *command side* that guarantees that the consistency boundary is respected
+     - the write-model is responsible for consistency
+     - the read-model simply consumes the consistent event log
+
 
 ???
-In CQRS the commands side or write-model, not the commands,
-guarantees that the consistency boundary is respected. The write-model has strict consistency.
 
-Last item is not clear. Events are not the consistency boundary.
-
-TODO: fusion with next slide
----
-
-# Aggregate responsibilities.
-
-
-  - An aggregate somehow decides if a command is accepted or rejected
-     - think of it as a *guardian* of a consistency boundary
-
-  - An aggregate somehow represents *the history of past events*
-     - think of it as the *accumulator* of a *traverse* over all past events
+@Renato: 
+PLease comment/change
 
 ---
 
@@ -274,18 +317,21 @@ TODO: fusion with next slide
 
 # Fun.CQRS
 
-- It's a minimal framework for CQRS/ES in Scala
+- It's a **minimal framework** for CQRS/ES in **Scala**
 
-- It tries to define an opiniated Functional Foundation for CQRS/ES
+- It tries to implement an **Opiniated Functional Foundation** for CQRS/ES
 
-- As of today, it has two backend implementations:
-  - **InMemoryBackend** (tests) and **AkkaBackend**
+- It offers a **concise use-site API**
 
-- Based on `F[_]` **Interpreters** (more on that soon)
+- As of today, it has two **backend** implementations:
+   - **InMemoryBackend** (tests) and **AkkaBackend**
+
+- It is based on **interpreters** of higher kinded types `F[_]` 
+  - more on that soon
 
 ---
 
-# More Fun.CQRS
+# Actions and Projections
 
 - `Actions`
   - define how `Command`'s are rejected or handled
@@ -299,23 +345,74 @@ TODO: fusion with next slide
 
 # Command Handlers and Interpreters
 
-- **Command Handlers** may return:
-  - None, one or many **Events**
-  - Unboxed (`Identity`)
-  - Boxed in: `Future`, `Try` or `Option`
+- `CommandHandler`'s may return:
+  - zero or more (i.e. one or many) `Events`'s
+  - unboxed (`Identity`) or boxed (in a `Future`, `Try` or `Option`)
+  - other types (like `Validation`) can be plugged in as well
 
 - The `Backend` defines the final effect `F[_]`
-  - for the `InMemoryBackend` `F` is `Identity`
-  - for `AkkaBackend` `F` is `Future`
-  - The role of an `Interpreter` is to transform the Command Handler return type to the target `F[_]`.
+  - for the `InMemoryBackend`, `F` is `Identity`
+  - for the `AkkaBackend`, `F` is `Future`
+
+- The `Interpreter` transforms the `CommandHandler`'s return type to `F[_]`
 
 ???
-It's important to explain that other types can be supported.
 
 This is also a good opportunity to talk about `Identity`
 
 TODO: add slide with code fragments of `eventually.OneEvent`, `attempt.OneEvent`, `maybe.ManyEvents`, etc
 Back to the basis, a `Command` can fail, an `Event` is always applied.
+---
+
+
+# Code Fragment (accepted command)
+
+```scala
+    actions
+      .commandHandler {
+        OneEvent {
+          case SomeCommand => 
+            SomeEvent(someEventArgs)
+        }
+      }
+      .commandHandler {
+        eventually.ManyEvents {
+          case OtherCommand(someCommandArgs) =>
+            Future.successful(
+              List(
+                FirstEvent(firstEventArgs),
+                SecondEvent(secondEventArgs)
+              )
+            )
+        }
+      }
+
+```
+
+???
+
+TODO: add slide with code fragments of `eventually.OneEvent`, `attempt.OneEvent`, `maybe.ManyEvents`, etc
+Back to the basis, a `Command` can fail, an `Event` is always applied.
+
+---
+
+
+# Code Fragment (rejected command)
+
+```scala
+    actions
+      .rejectCommand {
+        case anyCommand => 
+          new CommandException(s"Some message, possibly usng $anyCommand")
+      }
+
+```
+
+???
+
+TODO: add slide with code fragments of `eventually.OneEvent`, `attempt.OneEvent`, `maybe.ManyEvents`, etc
+Back to the basis, a `Command` can fail, an `Event` is always applied.
+
 ---
 
 # Backend

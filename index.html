@@ -139,10 +139,8 @@ layout: true
 class: center, middle, inverse
 
 ---
-## Functional 
-## Event Sourced 
-## Applications
-## with 
+## Functional Event Sourced Applications
+##  with
 # Fun.CQRS
 
 [strongtyped/fun-cqrs-workshop-lite](https://github.com/strongtyped/fun-cqrs-workshop-lite/)
@@ -151,24 +149,25 @@ class: center, middle, inverse
 
 ???
 
-@Renato: 
-I completely changed the layout of this slide 
+@Renato:
+I completely changed the layout of this slide
+@Luc
+It looked very strange all in one column.
+I brought it back in three pieces.
 
-TODO:
-
-Slide about Backends
-Slide about akka-persistence
-Slide about Projection and OffsetPersistenceStrategy
+- Functional Event Sourced Applications
+- with
+- Fun.CQRS
 
 Why is becoming popular?
 https://jazzy.id.au/2016/10/08/cqrs-increases-consistency.html
 
 ---
-  
+
 # Before we start ...
 
- 
- 
+
+
 ```bash
   git clone git@github.com:strongtyped/fun-cqrs-workshop-lite.git
 ```
@@ -190,9 +189,17 @@ layout: false
 
 ???
 
-@Renato: 
+@Renato:
 I am not sure if this is still an adequate list
 Maybe simply have 1. , 2. and 3. Workshop
+@Luc
+We still need to show the read side and it there.
+Maybe not the testing part, but it can be a king of homework.
+
+How to better test it? I learned that it makes no sense to test it in isolation.
+For instance, build a list of Events by hand and let it be projected.
+
+It's better to have a E2E test in which you send commands to one side and assert the impact of it on the other side.
 
 ---
 
@@ -206,9 +213,6 @@ class: left, top
      - **Query** (or **Read**) model
 
 ???
-
-@Renato: 
-I splitted 1 slide to 3 slides
 
 ---
 
@@ -227,7 +231,7 @@ class: left, top
 
 ???
 
-Commands are written in the imperative tense 
+Commands are written in the imperative tense
 `CreateOrder`, `AddItem`, `CancelOrder`, etc.
 
 Events are written in the past tense.
@@ -244,9 +248,10 @@ class: left, top
 
 ???
 
-@Renato: 
+@Renato:
 I have tried to stay close to the vocabulary of the standard java reactive org pub/sub api
-
+@Luc
+Great!
 
 ---
 
@@ -278,13 +283,13 @@ layout: false
      - supports multiple read models
         - using different storage mechanisms
         - using different data from write model
-      
+
 
 ???
 
 1. naive async: cron-job that reads the write-model and generates read-model. Very inefficient and write-model must have all data that read-model needs.
 2. sync: write-model and read-model together in same tx. What we do when we have many read-models? Over different storages? Contention not solved.
-3. async: event sourcing - event journal
+3. async: event sourcing - event journal, read-model updated asynchronously. Drawback is the added latency
 
 ---
 
@@ -292,11 +297,11 @@ layout: false
 
   - It's a **Domain Driven Design** concept, related to a **Consistency Boundary**
 
-  - An aggregate somehow represents the **history** of all past events
-     - think of it as an **accumulated result** of somehow **traversing** all past events, while **applying** them to an **accumulator** 
-
   - An aggregate somehow decides if a command is rejected or accepted (publishing zero or more events)
-     - think of it as a **guardian** of a consistency boundary
+    - think of it as a **guardian** of a consistency boundary
+
+  - An aggregate somehow represents the **history** of all past events
+     - think of it as an **accumulated result** of somehow **traversing** all past events, while **applying** them to an **accumulator**
 
   - It is the *command side* that guarantees that the consistency boundary is respected
      - the write-model is responsible for consistency
@@ -305,8 +310,22 @@ layout: false
 
 ???
 
-@Renato: 
-PLease comment/change
+What is a consistency boundary?
+Consistency boundary is a 'region' in your model that must always be consistent. Think about the invariants of a class. Can we have a Order with status 'paid' but without any item? And what about a cancelled Order, can we still pay for it?
+
+Whatever we do, the order must always be correct and consistent with itself.
+
+Do we need a consistency boundary between two orders? And what about a consistency boundary between an order and the stock? In the world of microservices, OrderService and StockService are two independent entities. We could have them  on the same app. Sharing the same database and running the process in one big transactions.
+
+When we split them in microservices we add flexibility and scalability (they may have different scalability requirements), but we loose that global transaction.
+
+Commands are only accepted iff the emitted events when applied bring the aggregate to a valid state. That said, events are always correct and can be re-applied over and over again as long as the ordering is preserved.
+(Note: this is not about idempotency, it's about deterministic replay of facts)
+
+@Luc
+Really nice phrasing: "read-model simply consumes the consistent event log"
+
+FYI, I swapped two paragraphs. First Command, then Event.
 
 ---
 
@@ -319,14 +338,14 @@ PLease comment/change
 
 - It's a **minimal framework** for CQRS/ES in **Scala**
 
-- It tries to implement an **Opiniated Functional Foundation** for CQRS/ES
+- It tries to implement an **Opinionated Functional Foundation** for CQRS/ES
 
 - It offers a **concise use-site API**
 
 - As of today, it has two **backend** implementations:
    - **InMemoryBackend** (tests) and **AkkaBackend**
 
-- It is based on **interpreters** of higher kinded types `F[_]` 
+- It is based on **interpreters** of higher kinded types `F[_]`
   - more on that soon
 
 ---
@@ -360,8 +379,9 @@ PLease comment/change
 
 This is also a good opportunity to talk about `Identity`
 
-TODO: add slide with code fragments of `eventually.OneEvent`, `attempt.OneEvent`, `maybe.ManyEvents`, etc
-Back to the basis, a `Command` can fail, an `Event` is always applied.
+Why we need `Identity`?
+`type Identity[T] = T`
+
 ---
 
 
@@ -370,13 +390,12 @@ Back to the basis, a `Command` can fail, an `Event` is always applied.
 ```scala
     actions
       .commandHandler {
-        OneEvent {
-          case SomeCommand => 
-            SomeEvent(someEventArgs)
+        OneEvent { // F = Identity (unwrapped event)
+          case SomeCommand => SomeEvent(someEventArgs)
         }
       }
       .commandHandler {
-        eventually.ManyEvents {
+        eventually.ManyEvents { // F = Future (events are wrapped)
           case OtherCommand(someCommandArgs) =>
             Future.successful(
               List(
@@ -391,7 +410,6 @@ Back to the basis, a `Command` can fail, an `Event` is always applied.
 
 ???
 
-TODO: add slide with code fragments of `eventually.OneEvent`, `attempt.OneEvent`, `maybe.ManyEvents`, etc
 Back to the basis, a `Command` can fail, an `Event` is always applied.
 
 ---
@@ -402,8 +420,8 @@ Back to the basis, a `Command` can fail, an `Event` is always applied.
 ```scala
     actions
       .rejectCommand {
-        case anyCommand => 
-          new CommandException(s"Some message, possibly usng $anyCommand")
+        case anyCommand =>
+          new CommandException(s"Some message, possibly using $anyCommand")
       }
 
 ```
@@ -415,11 +433,25 @@ Back to the basis, a `Command` can fail, an `Event` is always applied.
 
 ---
 
-# Backend
-<img src="images/backend.png" width="768" />
+# Backend, what is it good for?
+
+- the backend does the dirty job for us
+
+- it manages:
+
+  - persistence of events
+
+  - it replays events whenever needed (in order)
+
+  - eventually saves snapshots of your aggregates
+
+  - manages projections and its offsets
 
 ???
-The backend is a dirty impure world
+The backend is a dirty impure world.
+
+The backend, kind of, intercepts commands and manipulates the aggregate making sure that events coming out are persisted before accepting the next command. This is repetive work and should be abstracted away.
+
 ---
 class: center, middle, inverse
 
@@ -511,12 +543,96 @@ TODO: think about how to best start the hacking part. Should we do a first examp
   tip: use `rejectCommand` method. Watch-out the kind of function it accepts!
 
 ---
+class: center, middle, inverse
 
+# Read Side
+## (Projections)
+
+---
+
+On the read side we subscribe to events and we ...
+
+ - generate view models (classical projections)
+
+ - send commands to other aggregates, **Streaming Based Process Managers**
+
+ - transform and publish events to be consumed to other systems
+   (eg: using **Kafka**)
+
+---
+
+A Projection is built on three parts
+
+- a `PartialFunction[E, Future[Unit]]` that will consume the event
+
+- a **Reactive Streams** provider that will give access to a stream of events
+
+- An optional **OffsetPersistenceStrategy** to save the last processed offset.
+
+---
+
+# OrderDetailsProjection
+
+```scala
+class OrderDetailsProjection(orderDetailsRepo: OrderDetailsRepo)
+  extends Projection[OrderEvent] {
+
+  def handleEvent = sync.HandleEvent {
+    case evt: OrderWasCreated   => ??? // todo
+    case evt: ItemWasAdded      => ??? // todo
+    case evt: ItemWasRemoved    => ??? // todo
+    case evt: OrderWasCancelled => ??? // todo
+    case evt: OrderWasPayed     => ??? // todo
+  }
+}
+```
+
+---
+
+# Example based on Akka Streams
+```scala
+object EventPublisher {
+
+  /** builds a Akka Stream Source */
+  def source(offset: Long, tag: Tag)(implicit actorSys: ActorSystem):
+    Source[EventEnvelope, NotUsed] = {
+    val readJournal =
+      PersistenceQuery(actorSys)
+        .readJournalFor[LeveldbReadJournal](LeveldbReadJournal.Identifier)
+    readJournal.eventsByTag(tag.value, offset)
+  }
+
+  /** build a PublisherFactory. The Backend will use it to initialise streaming */
+  def orderEvents(implicit actorSys: ActorSystem) = {
+
+    new PublisherFactory[Long, OrderEvent] {
+      implicit val mat = ActorMaterializer()
+
+      override def from(offset: Option[Long]): Publisher[(Long, OrderEvent)] = {
+        val offsetNum = offset.getOrElse(0L)
+        EventPublisher
+          .source(offsetNum, Order.tag)
+          .collect {
+            case EventEnvelope(eventOffset, _, _, event: OrderEvent) =>
+              (eventOffset, event)
+          }
+          .runWith(Sink.asPublisher(false))
+      }}}}
+```
+
+???
+This code block deserves lots of explanation.
+
+Here we are defining a Akka Stream Source using the Akka Persistence Query API. We will query by tag.
+
+The Publisher is backed by this the Source, but before we open and transform the EventEnvelope by extracting the event
+from it. The final Publihser will emit events of type OrderEvent.
+---
 #Step 4
 
   Up to now we have only worked on the **Command Side**.
 
-  A **Projection** is basically a `PartialFunction[DomainEvent, Future[Unit]].`
+  A **Projection** is basically a `PartialFunction[E, Future[Unit]].`
 
   Often used to generate **Views**, but can also be used for intra **Aggregate** communication.
 
@@ -537,7 +653,24 @@ TODO: think about how to best start the hacking part. Should we do a first examp
   // orderRef ! CreateOrder
   ```
 
+---
 
+# Akka Persistence
+
+Fun.CQRS' **AkkaBackend** is based on akka-persistence and akka-persistence-query APIs.
+
+- An **AggregateActor** holds the state of an **Aggregate**
+
+- **Commands** are sent to it and **Command Handlers** are used to handle them.
+
+- **Command Handlers** effect type are lifted to `Future` (target effect of **AkkaBackend**)
+
+- Emitted **Events** are persisted before new **Commands** are processed
+
+- Persisted **Events** are applied using the **Event Handlers** and **Aggregate** state is mutated
+
+???
+The best demo is to start the Play app and goes through the configuration of the AkkaBackend.
 ---
 
 # Thanks!

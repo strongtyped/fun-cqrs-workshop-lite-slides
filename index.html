@@ -435,17 +435,15 @@ Back to the basis, a `Command` can fail, an `Event` is always applied.
 
 # Backend, what is it good for?
 
-- the backend does the dirty job for us
+## the backend does the dirty job for us
 
-- it manages:
+- it manages the persistence of events
 
-  - persistence of events
+- it replays events whenever needed (in order)
 
-  - it replays events whenever needed (in order)
+- it optionally saves snapshots of your aggregates
 
-  - eventually saves snapshots of your aggregates
-
-  - manages projections and its offsets
+- it manages projections and its offsets
 
 ???
 The backend is a dirty impure world.
@@ -513,7 +511,12 @@ class: center, middle, inverse
 It can be useful to code this first actions together with the studends.
 Specially because of command handlers returning `Future`, ie: `eventually.OneEvent`
 
-TODO: think about how to best start the hacking part. Should we do a first example with the students?
+Challenge the students to have a dicussion about the flaws of this implementation.
+AddItem command does a async call to another service with side-effect (make a reservation).
+What could go wrong? What could we do to fix it?
+
+Solution is out of scope of workshop, but important to have a 10 min brainstorm.
+
 ---
 
 #Step 2
@@ -532,6 +535,10 @@ TODO: think about how to best start the hacking part. Should we do a first examp
 
   If all items are removed, `NonEmptyOrder` transition back to `EmptyOrder` state.
 
+???
+
+Same kind of problem as in previous exercise. How to deal with remote side-effectful calls?
+Solution is out of scope of workshop, but important to have a 10 min brainstorm.
 ---
 
  #Step 3
@@ -550,6 +557,8 @@ class: center, middle, inverse
 
 ---
 
+# Projections
+
 On the read side we subscribe to events and we ...
 
  - generate view models (classical projections)
@@ -560,6 +569,8 @@ On the read side we subscribe to events and we ...
    (eg: using **Kafka**)
 
 ---
+
+# Projections
 
 A Projection is built on three parts
 
@@ -627,6 +638,27 @@ Here we are defining a Akka Stream Source using the Akka Persistence Query API. 
 
 The Publisher is backed by this the Source, but before we open and transform the EventEnvelope by extracting the event
 from it. The final Publihser will emit events of type OrderEvent.
+
+It's important to notice that a Publisher is pretty much dependent on the backend of choice as it involves by definition query and storage.
+---
+
+# OffsetPersistenceStrategy
+
+After successful processing of an event, it saves the last seen offset. On restart, it resumes from offset.
+
+
+
+```scala
+projection(
+  projection       = wire[OrderDetailsProjection],
+  publisherFactory = EventPublisher.orderEvents(actorSystem)
+)
+.withOffsetPersistenceStrategy(
+  // quick-win: saves offset as an event in akka-persistence journal
+  AkkaOffsetPersistenceStrategy.offsetAsLong(actorSystem, "order-defailts")
+)
+```
+
 ---
 #Step 4
 

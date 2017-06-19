@@ -147,14 +147,6 @@ class: center, middle, inverse
 
 [strongtyped/fun-cqrs-workshop-lite-slides](https://github.com/strongtyped/fun-cqrs-workshop-lite-slides/)
 
-???
-
-@Renato:
-I completely changed the layout of this slide
-@Luc
-It looked very strange all in one column.
-I brought it back in three pieces.
-
 - Functional Event Sourced Applications
 - with
 - Fun.CQRS
@@ -186,21 +178,6 @@ layout: false
 4. Read model design (configuring and testing)
 ]
 
-
-???
-
-@Renato:
-I am not sure if this is still an adequate list
-Maybe simply have 1. , 2. and 3. Workshop
-@Luc
-We still need to show the read side and it there.
-Maybe not the testing part, but it can be a king of homework.
-
-How to better test it? I learned that it makes no sense to test it in isolation.
-For instance, build a list of Events by hand and let it be projected.
-
-It's better to have a E2E test in which you send commands to one side and assert the impact of it on the other side.
-
 ---
 
 class: left, top
@@ -227,7 +204,7 @@ class: left, top
 
   - events represent **what has happened**
      - *zero events*: nothing happened
-     - *one or more events*: one or more things have happened
+     - *one or more events*: something (simple or more complex) happened
 
 ???
 
@@ -245,13 +222,6 @@ class: left, top
   - the read side **subscribes** to **events** and reacts upon event **notifications**
      - it can react in whatever way it wants
      - typically, it **generates views**
-
-???
-
-@Renato:
-I have tried to stay close to the vocabulary of the standard java reactive org pub/sub api
-@Luc
-Great!
 
 ---
 
@@ -282,7 +252,7 @@ layout: false
 
      - supports multiple read models
         - using different storage mechanisms
-        - using different data from write model
+        - using different views from write model
 
 
 ???
@@ -303,9 +273,9 @@ layout: false
   - An aggregate somehow represents the **history** of all past events
      - think of it as an **accumulated result** of somehow **traversing** all past events, while **applying** them to an **accumulator**
 
-  - It is the *command side* that guarantees that the consistency boundary is respected
+  - It is the command side that guarantees that the consistency boundary is respected
      - the write-model is responsible for consistency
-     - the read-model simply consumes the consistent event log
+     - the read-model simply somehow consumes the consistent sequence of events
 
 
 ???
@@ -315,17 +285,12 @@ Consistency boundary is a 'region' in your model that must always be consistent.
 
 Whatever we do, the order must always be correct and consistent with itself.
 
-Do we need a consistency boundary between two orders? And what about a consistency boundary between an order and the stock? In the world of microservices, OrderService and StockService are two independent entities. We could have them  on the same app. Sharing the same database and running the process in one big transactions.
+Do we need a consistency boundary between two orders? And what about a consistency boundary between an order and the stock? In the world of microservices, OrderService and StockService are two independent entities. We could have them on the same app. Sharing the same database and running the process in one big transactions.
 
 When we split them in microservices we add flexibility and scalability (they may have different scalability requirements), but we loose that global transaction.
 
 Commands are only accepted iff the emitted events when applied bring the aggregate to a valid state. That said, events are always correct and can be re-applied over and over again as long as the ordering is preserved.
 (Note: this is not about idempotency, it's about deterministic replay of facts)
-
-@Luc
-Really nice phrasing: "read-model simply consumes the consistent event log"
-
-FYI, I swapped two paragraphs. First Command, then Event.
 
 ---
 
@@ -338,7 +303,7 @@ FYI, I swapped two paragraphs. First Command, then Event.
 
 - It's a **minimal framework** for CQRS/ES in **Scala**
 
-- It tries to implement an **Opinionated Functional Foundation** for CQRS/ES
+- It tries to implement an **Opiniated Functional Foundation** for CQRS/ES
 
 - It offers a **concise use-site API**
 
@@ -365,7 +330,7 @@ FYI, I swapped two paragraphs. First Command, then Event.
 # Command Handlers and Interpreters
 
 - `CommandHandler`'s may return:
-  - zero or more (i.e. one or many) `Events`'s
+  - zero or more (i.e. one or many) `Event`'s
   - unboxed (`Identity`) or boxed (in a `Future`, `Try` or `Option`)
   - other types (like `Validation`) can be plugged in as well
 
@@ -443,7 +408,7 @@ Back to the basis, a `Command` can fail, an `Event` is always applied.
 
 - it optionally saves snapshots of your aggregates
 
-- it manages projections and its offsets
+- it manages projections and their offsets
 
 ???
 The backend is a dirty impure world.
@@ -529,11 +494,12 @@ Solution is out of scope of workshop, but important to have a 10 min brainstorm.
 
   - `AddItem` and `RemoveItem` items must interact with `StockService`
 
-  - `CancelOrder` as well
+    - If all items are removed, `NonEmptyOrder` transition back to `EmptyOrder`
+
+  - `CancelOrder` must interact with `StockService`
 
   - `PayOrder` must interact with `BillingService`
 
-  If all items are removed, `NonEmptyOrder` transition back to `EmptyOrder` state.
 
 ???
 
